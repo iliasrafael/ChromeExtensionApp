@@ -14,6 +14,14 @@ import argparse
 import requests
 import urlparse
 
+import zipfile
+
+#from slimit.parser import Parser
+from pyjsparser.parser import PyJsParser
+
+import os, shutil
+from os import walk
+
 try:
     import Tkinter
     import tkMessageBox
@@ -69,14 +77,9 @@ if Tkinter:
 
             self.text = Tkinter.Text(self)
             self.text.grid(row=0, column=0, padx=10, pady=10, columnspan=2)
-            self.text.config(state=Tkinter.DISABLED, height=10, width=40)
+            self.text.config(state=Tkinter.DISABLED, height=30, width=80)
 
             self.messageContent = Tkinter.StringVar()
-            #self.sendEntry = Tkinter.Entry(self, textvariable=self.messageContent)
-            #self.sendEntry.grid(row=1, column=0, padx=10, pady=10)
-
-            #self.sendButton = Tkinter.Button(self, text="Send", command=self.onSend)
-            #self.sendButton.grid(row=1, column=1, padx=10, pady=10)
 
             self.after(100, self.processMessages)
 
@@ -91,34 +94,62 @@ if Tkinter:
 
                 message = message.replace("\"", "")
 
+                #Download and unzip extension files
                 self.log("Downloading Source Code... ")
                 self.download(message)
                 self.log("Download finished successfully.")
 
-                self.send()
+                #List all .js files
+                f = []
+                for (dirpath, dirnames, filenames) in walk('extensions'):
+                    for filename in filenames:
+                        if filename[-3:] == '.js':
+                            path = dirpath+"/"+filename
+                            f.append(path)
 
-                #self.after(100, self.Send)
-                #send_message("AAAAAAAAAAA")
-                #text = "OLA POPA NOT!!!"
-                #self.log('Sending %s' % text)
-                #try:
-                #  send_message(text)
-                #except IOError:
-                #  tkMessageBox.showinfo('Native Messaging Example',
-                #       'Failed to send message.')
-                #sys.exit(1)
-                #time.sleep(0.01)
+                tkMessageBox.showinfo('Files:', f)
+
+
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                #Parsing
+                #parser = Parser()
+                try:
+                    parser = PyJsParser()
+                    for jsfile in f:
+                        self.log("Parsing file "+jsfile+" ...")
+                        with open(jsfile, 'r') as readfile:
+                            data = readfile.read().decode('utf-8')
+                        tree = parser.parse(data)
+
+                        self.log("File "+jsfile+" parsed successfully.")
+                        #result = tree.to_ecma()
+                        tkMessageBox.showinfo(jsfile, tree)
+
+
+                except Exception, e:
+                    tkMessageBox.showinfo('Application',  e)
+
+                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+                #Delete extension files
+                for the_file in os.listdir('extensions'):
+                    file_path = os.path.join('extensions', the_file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                        elif os.path.isdir(file_path): shutil.rmtree(file_path)
+                    except Exception as e:
+                        tkMessageBox.showinfo('Application',  e)
 
             self.after(100, self.processMessages)
 
         def send(self):
-            #text = "AAAAA".encode('utf-8')
             text = "AAAAA"
             self.log('Sending %s' % text)
             try:
                 send_message(text)
             except Exception, e:
-                tkMessageBox.showinfo('Native Messaging Example',  e)
+                tkMessageBox.showinfo('Application',  e)
 
             #sys.exit(1)
 
@@ -163,31 +194,15 @@ if Tkinter:
                 with open(file_name, 'wb') as fd:
                     for chunk in r.iter_content(chunk_size):
                         fd.write(chunk)
-                        #dowloaded_bytes += len(chunk)
-                        #sys.stdout.write("\r" + self.byte_to_human(dowloaded_bytes))
-                        #sys.stdout.flush()
+
+                #Unzip 
+                fantasy_zip = zipfile.ZipFile(file_name)
+                fantasy_zip.extractall('extensions')
+                fantasy_zip.close()
 
             except Exception, e:
-                tkMessageBox.showinfo('Native Messaging Example', e)
+                tkMessageBox.showinfo('Application', e)
 
-        def byte_to_human(self, len_in_byte):
-            """
-            Converts byte into human readable format.
-            :param len_in_byte:
-            :return:
-            """
-            in_kb = len_in_byte / 1024
-            in_mb = in_kb / 1024
-            in_gb = in_mb / 1024
-
-            if in_kb < 1024:
-                return "%.2f KB" % in_kb
-
-            if in_mb < 1024:
-                return "%.2f MB" % in_mb
-
-            if in_gb > 1:
-                return "%.2f GB" % in_gb
 
 def Main():
     if not Tkinter:
@@ -199,7 +214,7 @@ def Main():
     queue = Queue.Queue()
 
     main_window = NativeMessagingWindow(queue)
-    main_window.master.title('Native Messaging Example')
+    main_window.master.title('Application')
 
     thread = threading.Thread(target=read_thread_func, args=(queue,))
     thread.daemon = True
