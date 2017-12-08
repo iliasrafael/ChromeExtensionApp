@@ -18,6 +18,7 @@ import zipfile
 
 #from slimit.parser import Parser
 from pyjsparser.parser import PyJsParser
+from HTMLParser import HTMLParser
 
 import os, shutil
 from os import walk
@@ -67,7 +68,38 @@ def read_thread_func(queue):
             # In headless mode just send an echo message back.
             send_message('{"echo": %s}' % text)
 
+
+
 if Tkinter:
+    class MyHTMLParser(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            tkMessageBox.showinfo( "Start tag:", tag)
+            for attr in attrs:
+                tkMessageBox.showinfo( "attr:", attr)
+
+        def handle_endtag(self, tag):
+            tkMessageBox.showinfo( "End tag:", tag)
+
+        def handle_data(self, data):
+            tkMessageBox.showinfo( "Data:", data)
+
+        def handle_comment(self, data):
+            tkMessageBox.showinfo( "Comment:", data)
+
+        def handle_entityref(self, name):
+            c = unichr(name2codepoint[name])
+            tkMessageBox.showinfo( "Named ent:", c)
+
+        def handle_charref(self, name):
+            if name.startswith('x'):
+                c = unichr(int(name[1:], 16))
+            else:
+                c = unichr(int(name))
+            tkMessageBox.showinfo( "Num ent:", c)
+
+        def handle_decl(self, data):
+            tkMessageBox.showinfo( "Decl:", data)
+
     class NativeMessagingWindow(Tkinter.Frame):
         def __init__(self, queue):
             self.queue = queue
@@ -100,22 +132,26 @@ if Tkinter:
                 self.log("Download finished successfully.")
 
                 #List all .js files
-                f = []
+                js = []
+                html = []
                 for (dirpath, dirnames, filenames) in walk('extensions'):
                     for filename in filenames:
                         if filename[-3:] == '.js':
                             path = dirpath+"/"+filename
-                            f.append(path)
+                            js.append(path)
+                        elif filename[-5:] == '.html':
+                            path = dirpath+"/"+filename
+                            html.append(path)
 
-                tkMessageBox.showinfo('Files:', f)
-
+                tkMessageBox.showinfo('Javascript:', js)
+                tkMessageBox.showinfo('HTML:', html)
 
                 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                 #Parsing
                 #parser = Parser()
                 try:
                     parser = PyJsParser()
-                    for jsfile in f:
+                    for jsfile in js:
                         self.log("Parsing file "+jsfile+" ...")
                         with open(jsfile, 'r') as readfile:
                             data = readfile.read().decode('utf-8')
@@ -123,7 +159,18 @@ if Tkinter:
 
                         self.log("File "+jsfile+" parsed successfully.")
                         #result = tree.to_ecma()
-                        tkMessageBox.showinfo(jsfile, tree)
+                        #tkMessageBox.showinfo('Tree', tree)
+
+                    parser2 = MyHTMLParser()
+                    for htmlfile in html:
+                        self.log("Parsing file "+htmlfile+" ...")
+                        with open(htmlfile, 'r') as readfile:
+                            data = readfile.read().decode('utf-8')
+                        tree = parser2.feed(data)
+
+                        self.log("File "+htmlfile+" parsed successfully.")
+                        #result = tree.to_ecma()
+                        #tkMessageBox.showinfo('Tree', tree)
 
 
                 except Exception, e:
@@ -142,6 +189,8 @@ if Tkinter:
                         tkMessageBox.showinfo('Application',  e)
 
             self.after(100, self.processMessages)
+
+
 
         def send(self):
             text = "AAAAA"
