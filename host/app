@@ -24,254 +24,322 @@ import os, shutil
 from os import walk
 
 try:
-    import Tkinter
-    import tkMessageBox
+	import Tkinter
+	import tkMessageBox
 except ImportError:
-    Tkinter = None
+	Tkinter = None
+
+sys.setrecursionlimit(1000000)
 
 # On Windows, the default I/O mode is O_TEXT. Set this to O_BINARY
 # to avoid unwanted modifications of the input/output streams.
 if sys.platform == "win32":
-    import os, msvcrt
-    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+	import os, msvcrt
+	msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+	msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 
 # Helper function that sends a message to the webapp.
 def send_message(message):
-    # Write message size.
-    sys.stdout.write(struct.pack('I', len(message)))
-    # Write the message itself.
-    sys.stdout.write(message)
-    sys.stdout.flush()
+	# Write message size.
+	sys.stdout.write(struct.pack('I', len(message)))
+	# Write the message itself.
+	sys.stdout.write(message)
+	sys.stdout.flush()
 
 # Thread that reads messages from the webapp.
 def read_thread_func(queue):
-    message_number = 0
-    while 1:
-        # Read the message length (first 4 bytes).
-        text_length_bytes = sys.stdin.read(4)
+	message_number = 0
+	while 1:
+		# Read the message length (first 4 bytes).
+		text_length_bytes = sys.stdin.read(4)
 
-        if len(text_length_bytes) == 0:
-            if queue:
-                queue.put(None)
-            sys.exit(0)
+		if len(text_length_bytes) == 0:
+			if queue:
+				queue.put(None)
+			sys.exit(0)
 
-        # Unpack message length as 4 byte integer.
-        text_length = struct.unpack('i', text_length_bytes)[0]
+		# Unpack message length as 4 byte integer.
+		text_length = struct.unpack('i', text_length_bytes)[0]
 
-        # Read the text (JSON object) of the message.
-        text = sys.stdin.read(text_length).decode('utf-8')
+		# Read the text (JSON object) of the message.
+		text = sys.stdin.read(text_length).decode('utf-8')
 
-        if queue:
-            queue.put(text)
-        else:
-            # In headless mode just send an echo message back.
-            send_message('{"echo": %s}' % text)
+		if queue:
+			queue.put(text)
+		else:
+			# In headless mode just send an echo message back.
+			send_message('{"echo": %s}' % text)
+
+#Static analysis functions:
+black_list = ['https://fonts.googleapis.com/css?family=Roboto' ]
+#URL:
+def check_url(url):
+	rev = url[::-1]
+	if black_list.count(url) > 0 or black_list.count(rev) > 0:
+		return True
+	return False		
 
 
+
+
+report = ""
 
 if Tkinter:
-    class MyHTMLParser(HTMLParser):
-        def handle_starttag(self, tag, attrs):
-            tkMessageBox.showinfo( "Start tag:", tag)
-            for attr in attrs:
-                tkMessageBox.showinfo( "attr:", attr)
+	class MyHTMLParser(HTMLParser):
+		def handle_starttag(self, tag, attrs):
+			global report
+			#tkMessageBox.showinfo( "Start tag:", tag)
+			report += "Start tag: "+tag+"\n"
+			for attr in attrs:
+				#tkMessageBox.showinfo( "attr:", attr[1])
+				#if attr[0] == "href":
+					#tkMessageBox.showinfo( "attr:", attr[1])
+					if check_url(attr[1]):
+						#tkMessageBox.showinfo( "attr:", attr[1])
+						report += "attr: "+attr[1]+"\n"
 
-        def handle_endtag(self, tag):
-            tkMessageBox.showinfo( "End tag:", tag)
+		#def handle_endtag(self, tag):
+			#tkMessageBox.showinfo( "End tag:", tag)
 
-        def handle_data(self, data):
-            tkMessageBox.showinfo( "Data:", data)
+		#def handle_data(self, data):
+			#tkMessageBox.showinfo( "Data:", data)
 
-        def handle_comment(self, data):
-            tkMessageBox.showinfo( "Comment:", data)
+		#def handle_comment(self, data):
+			#tkMessageBox.showinfo( "Comment:", data)
 
-        def handle_entityref(self, name):
-            c = unichr(name2codepoint[name])
-            tkMessageBox.showinfo( "Named ent:", c)
+		def handle_entityref(self, name):
+			c = unichr(name2codepoint[name])
+			tkMessageBox.showinfo( "Named ent:", c)
 
-        def handle_charref(self, name):
-            if name.startswith('x'):
-                c = unichr(int(name[1:], 16))
-            else:
-                c = unichr(int(name))
-            tkMessageBox.showinfo( "Num ent:", c)
+		#def handle_charref(self, name):
+			#if name.startswith('x'):
+			#    c = unichr(int(name[1:], 16))
+			#else:
+			#    c = unichr(int(name))
+			#tkMessageBox.showinfo( "Num ent:", c)
 
-        def handle_decl(self, data):
-            tkMessageBox.showinfo( "Decl:", data)
+		#def handle_decl(self, data):
+			#tkMessageBox.showinfo( "Decl:", data)
 
-    class NativeMessagingWindow(Tkinter.Frame):
-        def __init__(self, queue):
-            self.queue = queue
+#_____________________________________________________________________
 
-            Tkinter.Frame.__init__(self)
-            self.pack()
+	class ASTVisitor(object):
+	    def visit(self, node):
+	        method = 'visit_%s' % node.__class__.__name__
+	        return getattr(self, method, self.generic_visit)(node)
 
-            self.text = Tkinter.Text(self)
-            self.text.grid(row=0, column=0, padx=10, pady=10, columnspan=2)
-            self.text.config(state=Tkinter.DISABLED, height=30, width=80)
-
-            self.messageContent = Tkinter.StringVar()
-
-            self.after(100, self.processMessages)
-
-        def processMessages(self):
-            while not self.queue.empty():
-                self.log("~~~~~~~~~~~~")
-                message = self.queue.get_nowait()
-                if message == None:
-                    self.quit()
-                    return
-                self.log("Received %s" % message)
-
-                message = message.replace("\"", "")
-
-                #Download and unzip extension files
-                self.log("Downloading Source Code... ")
-                self.download(message)
-                self.log("Download finished successfully.")
-
-                #List all .js files
-                js = []
-                html = []
-                for (dirpath, dirnames, filenames) in walk('extensions'):
-                    for filename in filenames:
-                        if filename[-3:] == '.js':
-                            path = dirpath+"/"+filename
-                            js.append(path)
-                        elif filename[-5:] == '.html':
-                            path = dirpath+"/"+filename
-                            html.append(path)
-
-                tkMessageBox.showinfo('Javascript:', js)
-                tkMessageBox.showinfo('HTML:', html)
-
-                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                #Parsing
-                #parser = Parser()
-                try:
-                    parser = PyJsParser()
-                    for jsfile in js:
-                        self.log("Parsing file "+jsfile+" ...")
-                        with open(jsfile, 'r') as readfile:
-                            data = readfile.read().decode('utf-8')
-                        tree = parser.parse(data)
-
-                        self.log("File "+jsfile+" parsed successfully.")
-                        #result = tree.to_ecma()
-                        #tkMessageBox.showinfo('Tree', tree)
-
-                    parser2 = MyHTMLParser()
-                    for htmlfile in html:
-                        self.log("Parsing file "+htmlfile+" ...")
-                        with open(htmlfile, 'r') as readfile:
-                            data = readfile.read().decode('utf-8')
-                        tree = parser2.feed(data)
-
-                        self.log("File "+htmlfile+" parsed successfully.")
-                        #result = tree.to_ecma()
-                        #tkMessageBox.showinfo('Tree', tree)
+	    def generic_visit(self, node):
+	        for child in node:
+	            self.visit(child)
 
 
-                except Exception, e:
-                    tkMessageBox.showinfo('Application',  e)
+	class NodeVisitor(object):
+	    def visit(self, node):
+	        """Returns a generator that walks all children recursively."""
+	        for child in node:
+	            yield child
+	            for subchild in self.visit(child):
+	                yield subchild
 
-                #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-                #Delete extension files
-                for the_file in os.listdir('extensions'):
-                    file_path = os.path.join('extensions', the_file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                        elif os.path.isdir(file_path): shutil.rmtree(file_path)
-                    except Exception as e:
-                        tkMessageBox.showinfo('Application',  e)
-
-            self.after(100, self.processMessages)
+	class MyVisitor(ASTVisitor):
+		def visit_Object(self, node):
+			tkMessageBox.showinfo( 'AAAAAAAAA', 'AAAAAAAAA')
+			for prop in node:
+				left, right = prop.left, prop.right
+				#print 'Property key=%s, value=%s' % (left.value, right.value)
+				if left.value == "Identifier":
+					report += 'Property key='+left.value+', value='+right.value+'\n'
+				# visit all children in turn
+				self.visit(prop)
 
 
+	class NativeMessagingWindow(Tkinter.Frame):
+		def __init__(self, queue):
+			self.queue = queue
 
-        def send(self):
-            text = "AAAAA"
-            self.log('Sending %s' % text)
-            try:
-                send_message(text)
-            except Exception, e:
-                tkMessageBox.showinfo('Application',  e)
+			Tkinter.Frame.__init__(self)
+			self.pack()
 
-            #sys.exit(1)
+			self.text = Tkinter.Text(self)
+			self.text.grid(row=0, column=0, padx=10, pady=10, columnspan=2)
+			self.text.config(state=Tkinter.DISABLED, height=30, width=80)
 
-        def log(self, message):
-            self.text.config(state=Tkinter.NORMAL)
-            self.text.insert(Tkinter.END, message + "\n")
-            self.text.config(state=Tkinter.DISABLED)
+			self.messageContent = Tkinter.StringVar()
 
-        def download(self, message):
-            try:
-                CRX_URL = "https://clients2.google.com/service/update2/crx?" \
-                "response=redirect&prodversion=62.0&x=id%3D~~~~%26installsource%3Dondemand%26uc"
-                USER_AGENT = "Chrome/62.0.3202.94"
-                headers = {
-                    "User-Agent": USER_AGENT,
-                    "Referer": "https://chrome.google.com",
-                }
+			self.after(100, self.processMessages)
 
-                chrome_app_id = message.split("/")[-1]
-                file_name = message.split("/")[-2]
+		def processMessages(self):
+			global report
+			while not self.queue.empty():
+				self.log("~~~~~~~~~~~~")
+				message = self.queue.get_nowait()
+				if message == None:
+					self.quit()
+					return
+				self.log("Received %s" % message)
 
-                download_url = CRX_URL.replace("~~~~", chrome_app_id)
+				message = message.replace("\"", "")
 
-                r = requests.get(url=download_url, headers=headers, stream=True, verify=False)
+				#Download and unzip extension files
+				self.log("Downloading Source Code... ")
+				self.download(message)
+				self.log("Download finished successfully.")
 
-                redirects = r.history
-                if len(redirects) > 0:
-                    redirect_header = redirects[-1].headers
-                    if "location" in redirect_header:
-                        loc = redirect_header["location"]
-                        uparse = urlparse.urlparse(loc)
-                        splits = uparse.path.split("/")
-                        _fname_ = splits[-1]
+				#List all .js files
+				js = []
+				html = []
+				for (dirpath, dirnames, filenames) in walk('extensions'):
+					for filename in filenames:
+						if filename[-3:] == '.js':
+							path = dirpath+"/"+filename
+							js.append(path)
+						elif filename[-5:] == '.html':
+							path = dirpath+"/"+filename
+							html.append(path)
 
-                if _fname_:
-                    file_name = _fname_.replace("extension", file_name)
-                else:
-                    file_name += ".crx"
+				tkMessageBox.showinfo('Javascript:', js)
+				tkMessageBox.showinfo('HTML:', html)
 
-                chunk_size = 16 * 1024
-                dowloaded_bytes = 0
-                with open(file_name, 'wb') as fd:
-                    for chunk in r.iter_content(chunk_size):
-                        fd.write(chunk)
+				#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+				#Parsing
+				#parser = Parser()
+				try:
+					parser = PyJsParser()
+					for jsfile in js:
+						self.log("Parsing file "+jsfile+" ...")
+						with open(jsfile, 'r') as readfile:
+							data = readfile.read().decode('utf-8')
+						tree = parser.parse(data)
 
-                #Unzip 
-                fantasy_zip = zipfile.ZipFile(file_name)
-                fantasy_zip.extractall('extensions')
-                fantasy_zip.close()
+						self.log("File "+jsfile+" parsed successfully.")
+						#result = tree.to_ecma()
+						#tkMessageBox.showinfo('Tree', tree)
 
-            except Exception, e:
-                tkMessageBox.showinfo('Application', e)
+						#visitor = MyVisitor()
+						#visitor.visit(tree)
+						#visitor = NodeVisitor()
+						#it = visitor.visit(tree)
+						#for i in it:
+						#	report += i
+						tkMessageBox.showinfo('Report', report)
+						report = ""
+
+					parser2 = MyHTMLParser()
+					for htmlfile in html:
+						self.log("Parsing file "+htmlfile+" ...")
+						with open(htmlfile, 'r') as readfile:
+							data = readfile.read().decode('utf-8')
+						tree = parser2.feed(data)
+
+						self.log("File "+htmlfile+" parsed successfully.")
+						#result = tree.to_ecma()
+						#tkMessageBox.showinfo('Tree', tree)
+						tkMessageBox.showinfo('Report', report)
+						report = ""
+
+				except Exception, e:
+					tkMessageBox.showinfo('Application',  e)
+
+				#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+				#Delete extension files
+				for the_file in os.listdir('extensions'):
+					file_path = os.path.join('extensions', the_file)
+					try:
+						if os.path.isfile(file_path):
+							os.unlink(file_path)
+						elif os.path.isdir(file_path): shutil.rmtree(file_path)
+					except Exception as e:
+						tkMessageBox.showinfo('Application',  e)
+
+				self.log("Finished.")
+			self.after(100, self.processMessages)
+
+
+
+		def send(self):
+			text = "AAAAA"
+			self.log('Sending %s' % text)
+			try:
+				send_message(text)
+			except Exception, e:
+				tkMessageBox.showinfo('Application',  e)
+
+			#sys.exit(1)
+
+		def log(self, message):
+			self.text.config(state=Tkinter.NORMAL)
+			self.text.insert(Tkinter.END, message + "\n")
+			self.text.config(state=Tkinter.DISABLED)
+
+		def download(self, message):
+			try:
+				CRX_URL = "https://clients2.google.com/service/update2/crx?" \
+				"response=redirect&prodversion=62.0&x=id%3D~~~~%26installsource%3Dondemand%26uc"
+				USER_AGENT = "Chrome/62.0.3202.94"
+				headers = {
+					"User-Agent": USER_AGENT,
+					"Referer": "https://chrome.google.com",
+				}
+
+				chrome_app_id = message.split("/")[-1]
+				chrome_app_id = chrome_app_id.split("?")[0]
+				tkMessageBox.showinfo('Application',  chrome_app_id)
+				file_name = message.split("/")[-2]
+
+				download_url = CRX_URL.replace("~~~~", chrome_app_id)
+
+				r = requests.get(url=download_url, headers=headers, stream=True, verify=False)
+
+				redirects = r.history
+				_fname_ =""
+				if len(redirects) > 0:
+					redirect_header = redirects[-1].headers
+					if "location" in redirect_header:
+						loc = redirect_header["location"]
+						uparse = urlparse.urlparse(loc)
+						splits = uparse.path.split("/")
+						_fname_ = splits[-1]
+
+				if _fname_:
+					file_name = _fname_.replace("extension", file_name)
+				else:
+					file_name += ".crx"
+
+				chunk_size = 16 * 1024
+				dowloaded_bytes = 0
+				with open(file_name, 'wb') as fd:
+					for chunk in r.iter_content(chunk_size):
+						fd.write(chunk)
+
+				#Unzip 
+				fantasy_zip = zipfile.ZipFile(file_name)
+				fantasy_zip.extractall('extensions')
+				fantasy_zip.close()
+
+			except Exception, e:
+				tkMessageBox.showinfo('Application', e)
 
 
 def Main():
-    if not Tkinter:
-        send_message('"Tkinter python module wasn\'t found. Running in headless ' +
-                     'mode. Please consider installing Tkinter."')
-        read_thread_func(None)
-        sys.exit(0)
+	if not Tkinter:
+		send_message('"Tkinter python module wasn\'t found. Running in headless ' +
+					 'mode. Please consider installing Tkinter."')
+		read_thread_func(None)
+		sys.exit(0)
 
-    queue = Queue.Queue()
+	queue = Queue.Queue()
 
-    main_window = NativeMessagingWindow(queue)
-    main_window.master.title('Application')
+	main_window = NativeMessagingWindow(queue)
+	main_window.master.title('Application')
 
-    thread = threading.Thread(target=read_thread_func, args=(queue,))
-    thread.daemon = True
-    thread.start()
+	thread = threading.Thread(target=read_thread_func, args=(queue,))
+	thread.daemon = True
+	thread.start()
 
-    main_window.mainloop()
+	main_window.mainloop()
 
-    sys.exit(0)
+	sys.exit(0)
 
 if __name__ == '__main__':
-    Main()
+	Main()
