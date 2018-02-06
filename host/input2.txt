@@ -1,0 +1,14 @@
+chrome["webRequest"]["onHeadersReceived"]["addListener"](function(e) {
+	var t = e["responseHeaders"];
+	for(var n = t["length"]-1; n>=0; --n) {
+		var r = t[n]["name"]["toLowerCase"]();
+		if(r == "x-frame-options" || r == "frame-options" || r == "content-security-policy" || r == "x-content-security-policy" || r == "x-webkit-csp") {
+			t["splice"](n, 1);
+		}
+	}
+	return {
+		responseHeaders: t
+	}
+}, {
+	urls: ["*://*/*"]
+}, ["blocking", responseHeaders]);

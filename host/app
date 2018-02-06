@@ -29,7 +29,8 @@ try:
 except ImportError:
 	Tkinter = None
 
-sys.setrecursionlimit(1000000)
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 # On Windows, the default I/O mode is O_TEXT. Set this to O_BINARY
 # to avoid unwanted modifications of the input/output streams.
@@ -70,19 +71,47 @@ def read_thread_func(queue):
 			# In headless mode just send an echo message back.
 			send_message('{"echo": %s}' % text)
 
-#Static analysis functions:
-black_list = ['https://fonts.googleapis.com/css?family=Roboto' ]
-#URL:
-def check_url(url):
-	rev = url[::-1]
-	if black_list.count(url) > 0 or black_list.count(rev) > 0:
-		return True
-	return False		
-
-
-
+def dict_generator(indict, pre=None):
+	pre = pre[:] if pre else []
+	if isinstance(indict, dict):
+		for key, value in indict.items():
+			if isinstance(value, dict):
+				for d in dict_generator(value, pre + [key]):
+					yield d
+			elif isinstance(value, list) or isinstance(value, tuple):
+				for v in value:
+					for d in dict_generator(v, pre + [key]):
+						yield d
+			else:
+				yield pre + [key, value]
+	else:
+		yield indict
 
 report = ""
+
+#Static analysis functions:
+#URL:
+def isURL(s):
+	if s.startswith("http://") or s.startswith("https://"):
+		return s
+	if s[::-1].startswith("http://") or s[::-1].startswith("https://"):
+		return s[::-1]
+
+	return ""
+
+def check_url(url):
+	global report
+
+	#u = urlparse(url)
+	spl = url.split('/')
+	u = ''.join(spl[2])
+	with open("blacklist.txt") as f:
+		for line in f:
+			if line.strip() == u:
+				#report += u+" -- "+line
+				return True
+	return False
+
 
 if Tkinter:
 	class MyHTMLParser(HTMLParser):
@@ -90,13 +119,13 @@ if Tkinter:
 			global report
 			#tkMessageBox.showinfo( "Start tag:", tag)
 			report += "Start tag: "+tag+"\n"
+			#if attrs != None:
 			for attr in attrs:
-				#tkMessageBox.showinfo( "attr:", attr[1])
-				#if attr[0] == "href":
-					#tkMessageBox.showinfo( "attr:", attr[1])
-					if check_url(attr[1]):
-						#tkMessageBox.showinfo( "attr:", attr[1])
-						report += "attr: "+attr[1]+"\n"
+				if attr[1] != None:
+					url = isURL(attr[1].strip())
+					if url != "":
+						if check_url(url):
+							report += "Blacklisted URL: "+url+"\n"
 
 		#def handle_endtag(self, tag):
 			#tkMessageBox.showinfo( "End tag:", tag)
@@ -123,36 +152,6 @@ if Tkinter:
 
 #_____________________________________________________________________
 
-	class ASTVisitor(object):
-	    def visit(self, node):
-	        method = 'visit_%s' % node.__class__.__name__
-	        return getattr(self, method, self.generic_visit)(node)
-
-	    def generic_visit(self, node):
-	        for child in node:
-	            self.visit(child)
-
-
-	class NodeVisitor(object):
-	    def visit(self, node):
-	        """Returns a generator that walks all children recursively."""
-	        for child in node:
-	            yield child
-	            for subchild in self.visit(child):
-	                yield subchild
-
-	class MyVisitor(ASTVisitor):
-		def visit_Object(self, node):
-			tkMessageBox.showinfo( 'AAAAAAAAA', 'AAAAAAAAA')
-			for prop in node:
-				left, right = prop.left, prop.right
-				#print 'Property key=%s, value=%s' % (left.value, right.value)
-				if left.value == "Identifier":
-					report += 'Property key='+left.value+', value='+right.value+'\n'
-				# visit all children in turn
-				self.visit(prop)
-
-
 	class NativeMessagingWindow(Tkinter.Frame):
 		def __init__(self, queue):
 			self.queue = queue
@@ -162,7 +161,7 @@ if Tkinter:
 
 			self.text = Tkinter.Text(self)
 			self.text.grid(row=0, column=0, padx=10, pady=10, columnspan=2)
-			self.text.config(state=Tkinter.DISABLED, height=30, width=80)
+			self.text.config(state=Tkinter.DISABLED, height=50, width=130)
 
 			self.messageContent = Tkinter.StringVar()
 
@@ -211,9 +210,56 @@ if Tkinter:
 							data = readfile.read().decode('utf-8')
 						tree = parser.parse(data)
 
-						self.log("File "+jsfile+" parsed successfully.")
-						#result = tree.to_ecma()
-						#tkMessageBox.showinfo('Tree', tree)
+						CallExpression = []
+						callees = []
+						extension_tab = False
+						remove_tab = False
+						listener = False
+						l = dict_generator(tree)
+						for i in l:
+							for j in i:
+								#URL:
+								url = isURL(str(j).strip())
+								if url != "":
+									self.log(url)
+									if check_url(url):
+										self.log("Blacklisted URL: "+url)
+										#self.log(report)
+										#report = ""
+
+							#Uninstallation:
+							if i.count("CallExpression") > 0:
+								if callees:
+									CallExpression.append(callees)
+									callees = []
+							elif i.count("callee") > 0 and i.count("name") > 0:
+								if i.count("addListener") > 0:
+									callees.append("addListener")
+								elif i.count("onUpdated") > 0:
+									callees.append("onUpdated")
+								elif i.count("tabs") > 0:
+									callees.append("tabs")
+								elif i.count("chrome") > 0:
+									callees.append("chrome")
+								elif i.count("remove") > 0:
+									callees.append("remove")
+							elif i.count("chrome://chrome/extensions/") or i.count("chrome://chrome/extensions") or i.count("chrome://extensions/") or i.count("chrome://extensions"):
+								extension_tab = True
+
+						if callees:
+							CallExpression.append(callees)
+							callees = []
+
+						self.log(str(CallExpression))
+						while CallExpression:
+							callees = CallExpression.pop()
+							if callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("onUpdated") > 0 and callees.count("addListener") > 0:
+								listener = True
+							elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("remove") > 0:
+								remove_tab = True
+
+						if listener and remove_tab and extension_tab:
+							self.log("Warning!")
 
 						#visitor = MyVisitor()
 						#visitor.visit(tree)
@@ -221,8 +267,11 @@ if Tkinter:
 						#it = visitor.visit(tree)
 						#for i in it:
 						#	report += i
-						tkMessageBox.showinfo('Report', report)
+						
+						#self.log(report)
+						#tkMessageBox.showinfo('Report', report)
 						report = ""
+						self.log("File "+jsfile+" parsed successfully.")
 
 					parser2 = MyHTMLParser()
 					for htmlfile in html:
