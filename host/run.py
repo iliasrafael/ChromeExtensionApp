@@ -22,7 +22,7 @@ def isURL(s):
 	if s.startswith("http://") or s.startswith("https://"):
 		return s
 	if s[::-1].startswith("http://") or s[::-1].startswith("https://"):
-		return s[::-1]
+		return "reversed"
 
 	return ""
 
@@ -35,10 +35,36 @@ def check_url(url):
 	with open("blacklist.txt") as f:
 		for line in f:
 			if line.strip() == u:
-				#report += u+" -- "+line
+				#print u+" -- "+line
 				return True
 	return False
 
+def update_calls(i, callees, CallExpression):
+	if i.count("callee") > 0 and (i.count("name") > 0 or i.count("value") > 0):
+		if i.count("addListener") > 0:
+			callees.append("addListener")
+		elif i.count("onUpdated") > 0:
+			callees.append("onUpdated")
+		elif i.count("tabs") > 0:
+			callees.append("tabs")
+		elif i.count("chrome") > 0:
+			callees.append("chrome")
+		elif i.count("remove") > 0:
+			callees.append("remove")
+		elif i.count("onHeadersReceived") > 0:
+			callees.append("onHeadersReceived")
+		elif i.count("webRequest") > 0:
+			callees.append("webRequest")
+		elif i.count("splice") > 0:
+			callees.append("splice")
+		elif i.count("install") >0:
+			callees.append("install")
+		elif i.count("webstore") >0:
+			callees.append("webstore")
+		elif i.count("query") >0:
+			callees.append("query")
+
+	
 def check_js(tree):
 	global report
 
@@ -50,16 +76,23 @@ def check_js(tree):
 	security_option = False
 	http_header = False
 	remove_security = False
+	install_extension = False
+	DoS = False
 
 	l = dict_generator(tree)
+
 	for i in l:
+		#print str(i)
 		for j in i:
 			#URL:
 			url = isURL(str(j).strip())
 			if url != "":
-				report += url+"\n"
+				#report += url+"\n"
+				if url == "reversed":
+					report += "Wanring! URL reversed.\n"
+					url = str(j).strip()[::-1]
 				if check_url(url):
-					report += "Blacklisted URL: "+url+"\n"
+					report += "Wanring! Blacklisted URL: "+url+"\n"
 					#report += report+"\n"
 					#report = ""
 
@@ -79,7 +112,7 @@ def check_js(tree):
 		CallExpression.append(callees)
 		callees = []
 
-	report += str(CallExpression)+"\n"
+	print str(CallExpression)
 	while CallExpression:
 		callees = CallExpression.pop()
 		if callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("onUpdated") > 0 and callees.count("addListener") > 0:
@@ -90,41 +123,29 @@ def check_js(tree):
 			http_header = True
 		elif callees.count("splice") > 0:
 			remove_security = True
+		elif callees.count("chrome") > 0 and callees.count("webstore") > 0 and callees.count("install") > 0:
+			install_extension = True
+		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("query") > 0:
+			DoS = True
 
+	#Uninstallation prevention
 	if listener and remove_tab and extension_tab:
-		report += "Warning! Extension tab blocked."+"\n"
-
+		print "Warning! Extension tab blocked."
+	# HTTP response header security options
 	if http_header and remove_security and security_option:
-		report += "Warning! Security options are changed."+"\n"
+		print "Warning! Security options are changed."
+	#Extension installation
+	if install_extension:
+		print "Warning! Extension installation."
+	#DoS
+	if DoS and remove_tab:
+		print "Warning! DoS detected."
 
-def update_calls(i, callees, CallExpression):
-	
-	#Uninstallation and HTTP response header security options:
-	
-	if i.count("callee") > 0 and (i.count("name") > 0 or i.count("value") > 0):
-		if i.count("addListener") > 0:
-			callees.append("addListener")
-		elif i.count("onUpdated") > 0:
-			callees.append("onUpdated")
-		elif i.count("tabs") > 0:
-			callees.append("tabs")
-		elif i.count("chrome") > 0:
-			callees.append("chrome")
-		elif i.count("remove") > 0:
-			callees.append("remove")
-		elif i.count("onHeadersReceived") > 0:
-			callees.append("onHeadersReceived")
-		elif i.count("webRequest") > 0:
-			callees.append("webRequest")
-		elif i.count("splice") > 0:
-			callees.append("splice")
-
-	
 
 def Main():
 	from pyjsparser.parser import PyJsParser
 
-	f = open("input1.txt", 'rb')
+	f = open("input.txt", 'rb')
 	x = f.read()
 	f.close()
 

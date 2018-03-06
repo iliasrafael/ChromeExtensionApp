@@ -34,7 +34,7 @@ def isURL(s):
 	if s.startswith("http://") or s.startswith("https://"):
 		return s
 	if s[::-1].startswith("http://") or s[::-1].startswith("https://"):
-		return s[::-1]
+		return "reversed"
 
 	return ""
 
@@ -57,6 +57,8 @@ def update_calls(i, callees, CallExpression):
 			callees.append("addListener")
 		elif i.count("onUpdated") > 0:
 			callees.append("onUpdated")
+		elif i.count("onCreated") > 0:
+			callees.append("onCreated")
 		elif i.count("tabs") > 0:
 			callees.append("tabs")
 		elif i.count("chrome") > 0:
@@ -73,6 +75,18 @@ def update_calls(i, callees, CallExpression):
 			callees.append("install")
 		elif i.count("webstore") >0:
 			callees.append("webstore")
+		elif i.count("query") >0:
+			callees.append("query")
+		elif i.count("system") >0:
+			callees.append("system")
+		elif i.count("cpu") >0:
+			callees.append("cpu")
+		elif i.count("display") >0:
+			callees.append("display")
+		elif i.count("sessions") >0:
+			callees.append("sessions")
+		elif i.count("getDevices") >0:
+			callees.append("getDevices")
 
 def check_js(tree):
 	global report
@@ -86,6 +100,10 @@ def check_js(tree):
 	http_header = False
 	remove_security = False
 	install_extension = False
+	DoS = False
+	cpu = False
+	displays = False
+	sessions = False
 
 	l = dict_generator(tree)
 	for i in l:
@@ -93,10 +111,13 @@ def check_js(tree):
 			#URL:
 			url = isURL(str(j).strip())
 			if url != "":
-				#print url
+				#report += url+"\n"
+				if url == "reversed":
+					report += "Wanring! URL reversed.\n"
+					url = str(j).strip()[::-1]
 				if check_url(url):
-					print "Blacklisted URL: "+url
-					#print report
+					report += "Wanring! Blacklisted URL: "+url+"\n"
+					#report += report+"\n"
 					#report = ""
 
 		k = [str(item).lower() for item in i]
@@ -118,7 +139,7 @@ def check_js(tree):
 	#print str(CallExpression)
 	while CallExpression:
 		callees = CallExpression.pop()
-		if callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("onUpdated") > 0 and callees.count("addListener") > 0:
+		if callees.count("chrome") > 0 and callees.count("tabs") > 0 and (callees.count("onUpdated") > 0 or callees.count("onCreated") > 0) and callees.count("addListener") > 0:
 			listener = True
 		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("remove") > 0:
 			remove_tab = True
@@ -128,6 +149,14 @@ def check_js(tree):
 			remove_security = True
 		elif callees.count("chrome") > 0 and callees.count("webstore") > 0 and callees.count("install") > 0:
 			install_extension = True
+		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("query") > 0:
+			DoS = True
+		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("cpu") > 0:
+			cpu = True
+		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("display") > 0:
+			displays = True
+		elif callees.count("chrome") > 0 and callees.count("sessions") > 0 and callees.count("getDevices") > 0:
+			sessions = True
 
 	#Uninstallation prevention
 	if listener and remove_tab and extension_tab:
@@ -138,6 +167,19 @@ def check_js(tree):
 	#Extension installation
 	if install_extension:
 		print "Warning! Extension installation."
+	#DoS
+	if DoS and remove_tab:
+		print "Warning! DoS detected."
+	#User's CPU info
+	if cpu:
+		report += "Warning! User's info monitoring detected(cpu)."+"\n"
+	#User's number of displays
+	if displays:
+		report += "Warning! User's info monitoring detected(displays)."+"\n"
+	#User's sessions info
+	if sessions:
+		report += "Warning! User's info monitoring detected(sessions)."+"\n"	
+
 
 class MyHTMLParser(HTMLParser):
 	isScript = False
@@ -146,7 +188,7 @@ class MyHTMLParser(HTMLParser):
 		
 		if tag == "script":
 			self.isScript = True
-			print "Start tag: "+tag
+			#print "Start tag: "+tag
 		#if attrs != None:
 		for attr in attrs:
 			if attr[1] != None:
@@ -164,7 +206,7 @@ class MyHTMLParser(HTMLParser):
 		
 		global report
 		if self.isScript:
-			print data
+			#print data
 			parser = PyJsParser()
 			tree = parser.parse(data)
 
