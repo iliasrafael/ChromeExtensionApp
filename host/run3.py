@@ -9,6 +9,7 @@ from os import walk
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
+sys.setrecursionlimit(10000)
 
 def dict_generator(indict, pre=None):
 	pre = pre[:] if pre else []
@@ -24,7 +25,10 @@ def dict_generator(indict, pre=None):
 			else:
 				yield pre + [key, value]
 	else:
-		yield indict
+		if indict == None:
+			yield []
+		else:
+			yield indict
 
 report = ""
 
@@ -51,7 +55,7 @@ def check_url(url):
 				return True
 	return False
 
-def update_calls(i, callees, CallExpression):
+def update_calls(i, callees, decs):
 	if i.count("callee") > 0 and (i.count("name") > 0 or i.count("value") > 0):
 		if i.count("addListener") > 0:
 			callees.append("addListener")
@@ -73,6 +77,10 @@ def update_calls(i, callees, CallExpression):
 			callees.append("splice")
 		elif i.count("install") >0:
 			callees.append("install")
+		elif i.count("management") >0:
+			callees.append("management")
+		elif i.count("uninstall") >0:
+			callees.append("uninstall")
 		elif i.count("webstore") >0:
 			callees.append("webstore")
 		elif i.count("query") >0:
@@ -87,12 +95,25 @@ def update_calls(i, callees, CallExpression):
 			callees.append("sessions")
 		elif i.count("getDevices") >0:
 			callees.append("getDevices")
+		elif i.count("XMLHttpRequest") >0:
+			callees.append("XMLHttpRequest")
+		elif i.count("send") >0:
+			callees.append("send")
+
+	elif i.count("declarations") > 0 and (i.count("name") > 0 or i.count("value") > 0):
+		if i.count("document") >0:
+			decs.append("document")
+		elif i.count("forms") >0:
+			decs.append("forms")
 
 def check_js(tree):
 	global report
 
 	CallExpression = []
 	callees = []
+	Vars = []
+	decs = []
+
 	extension_tab = False
 	remove_tab = False
 	listener = False
@@ -100,10 +121,14 @@ def check_js(tree):
 	http_header = False
 	remove_security = False
 	install_extension = False
+	uninstall_extension = False
 	DoS = False
 	cpu = False
 	displays = False
 	sessions = False
+	forms = False
+	XMLHttpRequest = False
+	send = False
 
 	l = dict_generator(tree)
 	for i in l:
@@ -122,11 +147,15 @@ def check_js(tree):
 
 		k = [str(item).lower() for item in i]
 
-		update_calls(i, callees, CallExpression)
+		update_calls(i, callees, decs)
 		if i.count("CallExpression") > 0:
 			if callees:
 				CallExpression.append(callees)
 				callees = []
+		if i.count("VariableDeclarator") > 0:
+			if decs:
+				Vars.append(decs)
+				decs = []
 		elif i.count("chrome://chrome/extensions/") > 0 or i.count("chrome://chrome/extensions") > 0 or i.count("chrome://extensions/") > 0 or i.count("chrome://extensions") > 0:
 			extension_tab = True
 		elif k.count("x-frame-options") > 0 or k.count("frame-options") > 0 or k.count("content-security-policy") > 0 or k.count("x-content-security-policy") > 0 or k.count("x-webkit-csp") > 0:
@@ -149,6 +178,8 @@ def check_js(tree):
 			remove_security = True
 		elif callees.count("chrome") > 0 and callees.count("webstore") > 0 and callees.count("install") > 0:
 			install_extension = True
+		elif callees.count("chrome") > 0 and callees.count("management") > 0 and callees.count("uninstall") > 0:
+			uninstall_extension = True
 		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("query") > 0:
 			DoS = True
 		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("cpu") > 0:
@@ -157,6 +188,15 @@ def check_js(tree):
 			displays = True
 		elif callees.count("chrome") > 0 and callees.count("sessions") > 0 and callees.count("getDevices") > 0:
 			sessions = True
+		elif callees.count("XMLHttpRequest") > 0:
+			XMLHttpRequest = True
+		elif callees.count("send") > 0:
+			send = True
+
+	while Vars:
+		decs = Vars.pop()
+		if decs.count("document") > 0 and decs.count("forms") > 0:
+			forms = True
 
 	#Uninstallation prevention
 	if listener and remove_tab and extension_tab:
@@ -167,6 +207,9 @@ def check_js(tree):
 	#Extension installation
 	if install_extension:
 		print "Warning! Extension installation."
+	#Extension uninstallation
+	if uninstall_extension:
+		print "Warning! Extension uninstallation."
 	#DoS
 	if DoS and remove_tab:
 		print "Warning! DoS detected."
@@ -178,7 +221,10 @@ def check_js(tree):
 		report += "Warning! User's info monitoring detected(displays)."+"\n"
 	#User's sessions info
 	if sessions:
-		report += "Warning! User's info monitoring detected(sessions)."+"\n"	
+		report += "Warning! User's info monitoring detected(sessions)."+"\n"
+	#Form submit requests:
+	if forms and XMLHttpRequest and send:
+		report += "Warning! Form submit requests."+"\n"
 
 
 class MyHTMLParser(HTMLParser):
