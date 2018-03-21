@@ -55,6 +55,7 @@ def check_url(url):
 				return True
 	return False
 
+#Check for specific calls and variables
 def update_calls(i, callees, decs):
 	if i.count("callee") > 0 and (i.count("name") > 0 or i.count("value") > 0):
 		if i.count("addListener") > 0:
@@ -148,16 +149,23 @@ def check_js(tree):
 		k = [str(item).lower() for item in i]
 
 		update_calls(i, callees, decs)
+		#Gather call expressions
 		if i.count("CallExpression") > 0:
 			if callees:
 				CallExpression.append(callees)
 				callees = []
-		if i.count("VariableDeclarator") > 0:
+
+		#Gather variable declarations
+		elif i.count("VariableDeclarator") > 0:
 			if decs:
 				Vars.append(decs)
 				decs = []
+
+		#Check for extension tab
 		elif i.count("chrome://chrome/extensions/") > 0 or i.count("chrome://chrome/extensions") > 0 or i.count("chrome://extensions/") > 0 or i.count("chrome://extensions") > 0:
 			extension_tab = True
+
+		#Check for security options
 		elif k.count("x-frame-options") > 0 or k.count("frame-options") > 0 or k.count("content-security-policy") > 0 or k.count("x-content-security-policy") > 0 or k.count("x-webkit-csp") > 0:
 			security_option = True
 
@@ -168,28 +176,51 @@ def check_js(tree):
 	#print str(CallExpression)
 	while CallExpression:
 		callees = CallExpression.pop()
+		# chrome.tabs.onUpdated.addListener / chrome.tabs.onCreated.addListener
 		if callees.count("chrome") > 0 and callees.count("tabs") > 0 and (callees.count("onUpdated") > 0 or callees.count("onCreated") > 0) and callees.count("addListener") > 0:
 			listener = True
+
+		#chrome.tabs.remove
 		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("remove") > 0:
 			remove_tab = True
+
+		#chrome.webRequest.onHeadersReceived.addListener
 		elif callees.count("chrome") > 0 and callees.count("webRequest") > 0 and callees.count("onHeadersReceived") > 0 and callees.count("addListener") > 0:
 			http_header = True
+
+		#responseHeaders.splice
 		elif callees.count("splice") > 0:
 			remove_security = True
+
+		#chrome.webstore.install
 		elif callees.count("chrome") > 0 and callees.count("webstore") > 0 and callees.count("install") > 0:
 			install_extension = True
+
+		#chrome.management.uninstall
 		elif callees.count("chrome") > 0 and callees.count("management") > 0 and callees.count("uninstall") > 0:
 			uninstall_extension = True
+
+		#chrome.tabs.query
 		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("query") > 0:
 			DoS = True
+
+		#chrome.system.cpu
 		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("cpu") > 0:
 			cpu = True
+
+		#chrome.system.display
 		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("display") > 0:
 			displays = True
+
+		#chrome.sessions.getDevices
 		elif callees.count("chrome") > 0 and callees.count("sessions") > 0 and callees.count("getDevices") > 0:
 			sessions = True
+
+		#new XMLHttpRequest
 		elif callees.count("XMLHttpRequest") > 0:
 			XMLHttpRequest = True
+
+		#XMLHttpRequest.send
 		elif callees.count("send") > 0:
 			send = True
 
@@ -224,7 +255,7 @@ def check_js(tree):
 		report += "Warning! User's info monitoring detected(sessions)."+"\n"
 	#Form submit requests:
 	if forms and XMLHttpRequest and send:
-		report += "Warning! Form submit requests."+"\n"
+		report += "Warning! Form submit requests leak."+"\n"
 
 
 class MyHTMLParser(HTMLParser):
