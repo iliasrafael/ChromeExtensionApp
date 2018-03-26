@@ -1,3 +1,0 @@
-<body>
-<script type="text/javascript">alert("<strong>hello!</strong>");</script>
-</body>

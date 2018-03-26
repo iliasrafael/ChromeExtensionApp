@@ -55,57 +55,36 @@ def check_url(url):
 				return True
 	return False
 
-#Check for specific calls and variables
-def update_calls(i, callees, decs):
+call_list = ["addListener", "onUpdated", "onCreated", "onBeforeRequest", "tabs", "chrome", "remove", "onHeadersReceived", "webRequest", "splice", "install", "management", "uninstall", "webstore", "query", "system", "cpu", "display", "sessions", "getDevices", "XMLHttpRequest", "send"]
+
+dec_list = ["document", "forms"]
+
+elem_list = ["blocking"]
+
+key_list = ["cancel", "redirectUrl"]
+
+#Check for specific calls, variables, elements and keys
+def update_calls(i, callees, decs, elems, keys):
+
 	if i.count("callee") > 0 and (i.count("name") > 0 or i.count("value") > 0):
-		if i.count("addListener") > 0:
-			callees.append("addListener")
-		elif i.count("onUpdated") > 0:
-			callees.append("onUpdated")
-		elif i.count("onCreated") > 0:
-			callees.append("onCreated")
-		elif i.count("tabs") > 0:
-			callees.append("tabs")
-		elif i.count("chrome") > 0:
-			callees.append("chrome")
-		elif i.count("remove") > 0:
-			callees.append("remove")
-		elif i.count("onHeadersReceived") > 0:
-			callees.append("onHeadersReceived")
-		elif i.count("webRequest") > 0:
-			callees.append("webRequest")
-		elif i.count("splice") > 0:
-			callees.append("splice")
-		elif i.count("install") >0:
-			callees.append("install")
-		elif i.count("management") >0:
-			callees.append("management")
-		elif i.count("uninstall") >0:
-			callees.append("uninstall")
-		elif i.count("webstore") >0:
-			callees.append("webstore")
-		elif i.count("query") >0:
-			callees.append("query")
-		elif i.count("system") >0:
-			callees.append("system")
-		elif i.count("cpu") >0:
-			callees.append("cpu")
-		elif i.count("display") >0:
-			callees.append("display")
-		elif i.count("sessions") >0:
-			callees.append("sessions")
-		elif i.count("getDevices") >0:
-			callees.append("getDevices")
-		elif i.count("XMLHttpRequest") >0:
-			callees.append("XMLHttpRequest")
-		elif i.count("send") >0:
-			callees.append("send")
+		for c in call_list:
+			if i.count(c) > 0:
+				callees.append(c)
 
 	elif i.count("declarations") > 0 and (i.count("name") > 0 or i.count("value") > 0):
-		if i.count("document") >0:
-			decs.append("document")
-		elif i.count("forms") >0:
-			decs.append("forms")
+		for d in dec_list:
+			if i.count(d) > 0:
+				decs.append(d)
+
+	elif i.count("elements") > 0 and (i.count("name") > 0 or i.count("value") > 0):
+		for e in elem_list:
+			if i.count(e) > 0:
+				elems.append(e)
+
+	elif i.count("key") > 0 and (i.count("name") > 0 or i.count("value") > 0):
+		for k in key_list:
+			if i.count(k) > 0:
+				keys.append(k)
 
 def check_js(tree):
 	global report
@@ -114,10 +93,13 @@ def check_js(tree):
 	callees = []
 	Vars = []
 	decs = []
+	elems = []
+	keys = []
 
 	extension_tab = False
 	remove_tab = False
-	listener = False
+	tab_listener = False
+	web_listener = False
 	security_option = False
 	http_header = False
 	remove_security = False
@@ -130,6 +112,9 @@ def check_js(tree):
 	forms = False
 	XMLHttpRequest = False
 	send = False
+	redirect = False
+	cancel = False
+	block = False
 
 	l = dict_generator(tree)
 	for i in l:
@@ -137,18 +122,19 @@ def check_js(tree):
 			#URL:
 			url = isURL(str(j).strip())
 			if url != "":
-				#report += url+"\n"
+				#print url+"\n"
 				if url == "reversed":
-					report += "Wanring! URL reversed.\n"
+					print "Wanring! URL reversed.\n"
 					url = str(j).strip()[::-1]
 				if check_url(url):
-					report += "Wanring! Blacklisted URL: "+url+"\n"
-					#report += report+"\n"
+					print "Wanring! Blacklisted URL: "+url+"\n"
+					#print report+"\n"
 					#report = ""
 
 		k = [str(item).lower() for item in i]
 
-		update_calls(i, callees, decs)
+		update_calls(i, callees, decs, elems, keys)
+
 		#Gather call expressions
 		if i.count("CallExpression") > 0:
 			if callees:
@@ -173,12 +159,16 @@ def check_js(tree):
 		CallExpression.append(callees)
 		callees = []
 
-	#print str(CallExpression)
 	while CallExpression:
 		callees = CallExpression.pop()
+
 		# chrome.tabs.onUpdated.addListener / chrome.tabs.onCreated.addListener
 		if callees.count("chrome") > 0 and callees.count("tabs") > 0 and (callees.count("onUpdated") > 0 or callees.count("onCreated") > 0) and callees.count("addListener") > 0:
-			listener = True
+			tab_listener = True
+
+		# chrome.webRequest.onBeforeRequest.addListener
+		elif callees.count("chrome") > 0 and callees.count("webRequest") > 0 and callees.count("onBeforeRequest") > 0 and callees.count("addListener") > 0:
+			web_listener = True
 
 		#chrome.tabs.remove
 		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("remove") > 0:
@@ -226,13 +216,26 @@ def check_js(tree):
 
 	while Vars:
 		decs = Vars.pop()
+
+		#document.forms
 		if decs.count("document") > 0 and decs.count("forms") > 0:
 			forms = True
 
+	for el in elems:
+		#["blocking"]
+		if el == "blocking":
+			block = True
+
+	for k in keys:
+		if k == "redirectUrl":
+			redirect = True
+		elif k == "cancel":
+			cancel = True
+
 	#Uninstallation prevention
-	if listener and remove_tab and extension_tab:
+	if tab_listener and remove_tab and extension_tab:
 		print "Warning! Extension tab blocked."
-	# HTTP response header security options
+	#HTTP response header security options
 	if http_header and remove_security and security_option:
 		print "Warning! Security options are changed."
 	#Extension installation
@@ -246,16 +249,22 @@ def check_js(tree):
 		print "Warning! DoS detected."
 	#User's CPU info
 	if cpu:
-		report += "Warning! User's info monitoring detected(cpu)."+"\n"
+		print "Warning! User's info monitoring detected (cpu)."
 	#User's number of displays
 	if displays:
-		report += "Warning! User's info monitoring detected(displays)."+"\n"
+		print "Warning! User's info monitoring detected (displays)."
 	#User's sessions info
 	if sessions:
-		report += "Warning! User's info monitoring detected(sessions)."+"\n"
-	#Form submit requests:
+		print "Warning! User's info monitoring detected (sessions)."
+	#Form submit requests
 	if forms and XMLHttpRequest and send:
-		report += "Warning! Form submit requests leak."+"\n"
+		print "Warning! Form submit requests leak."
+	#Access to websites blocked
+	if web_listener and cancel and block:
+		print "Warning! Access to websites blocked."
+	#URL MITM
+	if web_listener and redirect and block:
+		print "Warning! URL redirection (MITM)."
 
 
 class MyHTMLParser(HTMLParser):
@@ -288,7 +297,7 @@ class MyHTMLParser(HTMLParser):
 			tree = parser.parse(data)
 
 			check_js(tree)
-			print report
+			#print report
 
 
 
@@ -317,10 +326,10 @@ def Main():
 			tree = parser.parse(data)
 
 			check_js(tree)
-			print report
+			#print report
 
 			report = ""
-			print "File "+jsfile+" parsed successfully."
+			print "File "+jsfile+" parsed successfully.\n"
 
 		parser2 = MyHTMLParser()
 		for htmlfile in html:
@@ -329,10 +338,10 @@ def Main():
 				data = readfile.read().decode('utf-8')
 			tree = parser2.feed(data)
 
-			print "File "+htmlfile+" parsed successfully."
+			print "File "+htmlfile+" parsed successfully.\n"
 			#result = tree.to_ecma()
 			
-			print report
+			#print report
 			report = ""
 
 	except Exception, e:

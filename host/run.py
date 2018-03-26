@@ -145,16 +145,18 @@ def check_js(tree):
 def Main():
 	from pyjsparser.parser import PyJsParser
 
-	f = open("input.txt", 'rb')
+	f = open("input7.txt", 'rb')
 	x = f.read()
 	f.close()
 
 	p = PyJsParser()
 	tree = p.parse(x)
 
-	check_js(tree)
+	#check_js(tree)
+	for i in dict_generator(tree):
+		print str(i)
 
-	print report
+	#print report
 
 if __name__ == '__main__':
 	Main()
