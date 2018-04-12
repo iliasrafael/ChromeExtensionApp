@@ -31,8 +31,13 @@ function sendNativeMessage() {
   chrome.tabs.query({'active': true, 'lastFocusedWindow': true}, function (tabs) {
     var x = tabs[0].url;
     message = {"text": x};
-    port.postMessage(x);
-    appendMessage("Sent message: <b>" + JSON.stringify(x) + "</b>");
+    if (x.startsWith("https://chrome.google.com/webstore/detail")) {
+      port.postMessage(x);
+      appendMessage("Run analysis for extension: <b>" + JSON.stringify(x.split("/")[5]) + "</b>");
+    } else {
+      appendMessage("You have to select a chrome extension from webstore.");
+    }
+    updateUiState();
   });
   
   

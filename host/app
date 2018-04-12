@@ -92,6 +92,8 @@ def dict_generator(indict, pre=None):
 			yield indict
 
 report = ""
+counter = 0
+warning = False
 
 #Static analysis functions:
 #URL:
@@ -104,15 +106,11 @@ def isURL(s):
 	return ""
 
 def check_url(url):
-	global report
-
-	#u = urlparse(url)
 	spl = url.split('/')
 	u = ''.join(spl[2])
 	with open("blacklist.txt") as f:
 		for line in f:
 			if line.strip() == u:
-				#report += u+" -- "+line
 				return True
 	return False
 
@@ -164,7 +162,8 @@ def update_calls(i, callees, decs, elems, keys):
 			keys.append("redirectUrl")
 
 def check_js(tree):
-	global report
+	global report, counter, warning
+	warning = False
 
 	CallExpression = []
 	callees = []
@@ -199,14 +198,15 @@ def check_js(tree):
 			#URL:
 			url = isURL(str(j).strip())
 			if url != "":
-				#report += url+"\n"
 				if url == "reversed":
-					report += "Wanring! URL reversed.\n"
+					report += "Warning! URL reversed.\n"
+					counter += 1
+					warning = True
 					url = str(j).strip()[::-1]
 				if check_url(url):
-					report += "Wanring! Blacklisted URL: "+url+"\n"
-					#report += report+"\n"
-					#report = ""
+					report += "Warning! Blacklisted URL: "+url+"\n"
+					counter += 1
+					warning = True
 
 		k = [str(item).lower() for item in i]
 
@@ -235,7 +235,6 @@ def check_js(tree):
 		CallExpression.append(callees)
 		callees = []
 
-	#report += str(CallExpression)+"\n"
 	while CallExpression:
 		callees = CallExpression.pop()
 
@@ -312,86 +311,84 @@ def check_js(tree):
 	#Uninstallation prevention
 	if tab_listener and remove_tab and extension_tab:
 		report += "Warning! Extension tab blocked.\n"
+		counter += 1
+		warning = True
 	#HTTP response header security options
 	if http_header and remove_security and security_option:
 		report += "Warning! Security options are changed.\n"
+		counter += 1
+		warning = True
 	#Extension installation
 	if install_extension:
 		report += "Warning! Extension installation.\n"
+		counter += 1
+		warning = True
 	#Extension uninstallation
 	if uninstall_extension:
 		report += "Warning! Extension uninstallation.\n"
+		counter += 1
+		warning = True
 	#DoS
 	if DoS and remove_tab:
 		report += "Warning! DoS detected.\n"
+		counter += 1
+		warning = True
 	#User's CPU info
 	if cpu:
 		report += "Warning! User's info monitoring detected (cpu).\n"
+		counter += 1
+		warning = True
 	#User's number of displays
 	if displays:
 		report += "Warning! User's info monitoring detected (displays).\n"
+		counter += 1
+		warning = True
 	#User's sessions info
 	if sessions:
 		report += "Warning! User's info monitoring detected (sessions).\n"
+		counter += 1
+		warning = True
 	#Form submit requests
 	if forms and XMLHttpRequest and send:
 		report += "Warning! Form submit requests leak.\n"
+		counter += 1
+		warning = True
 	#Access to websites blocked
 	if web_listener and cancel and block:
 		report += "Warning! Access to websites blocked.\n"
+		counter += 1
+		warning = True
 	#URL MITM
 	if web_listener and redirect and block:
 		report += "Warning! URL redirection (MITM).\n"
+		counter += 1
+		warning = True
 
 if Tkinter:
 	class MyHTMLParser(HTMLParser):
 		isScript = False
 		def handle_starttag(self, tag, attrs):
 			global report
-			#tkMessageBox.showinfo( "Start tag:", tag)
 			if tag == "script":
 				self.isScript = True
-				#report += "Start tag: "+tag+"\n"
-			#if attrs != None:
+
 			for attr in attrs:
 				if attr[1] != None:
 					url = isURL(attr[1].strip())
 					if url != "":
 						if check_url(url):
-							report += "Blacklisted URL: "+url+"\n"
+							report += "Warning! Blacklisted URL: "+url+"\n"
 
 		def handle_endtag(self, tag):
-			#tkMessageBox.showinfo( "End tag:", tag)
 			if tag == "script":
 				self.isScript = False
 
 		def handle_data(self, data):
-			#tkMessageBox.showinfo( "Data:", data)
-			global report
 			if self.isScript:
-				#report += data+"\n"
 				parser = PyJsParser()
 				tree = parser.parse(data)
 
 				check_js(tree)
-				#self.log(report)
-
-		#def handle_comment(self, data):
-			#tkMessageBox.showinfo( "Comment:", data)
-
-		#def handle_entityref(self, name):
-			#c = unichr(name2codepoint[name])
-			#tkMessageBox.showinfo( "Named ent:", c)
-
-		#def handle_charref(self, name):
-			#if name.startswith('x'):
-			#    c = unichr(int(name[1:], 16))
-			#else:
-			#    c = unichr(int(name))
-			#tkMessageBox.showinfo( "Num ent:", c)
-
-		#def handle_decl(self, data):
-			#tkMessageBox.showinfo( "Decl:", data)
 
 #_____________________________________________________________________
 
@@ -412,14 +409,15 @@ if Tkinter:
 
 		
 		def processMessages(self):
-			global report
+			global report, counter, warning
+
 			while not self.queue.empty():
 				self.log("~~~~~~~~~~~~")
 				message = self.queue.get_nowait()
 				if message == None:
 					self.quit()
 					return
-				self.log("Received %s" % message)
+				self.log("Exception URL: %s" % message)
 
 				message = message.replace("\"", "")
 
@@ -440,39 +438,35 @@ if Tkinter:
 							path = dirpath+"/"+filename
 							html.append(path)
 
-				#tkMessageBox.showinfo('Javascript:', js)
-				#tkMessageBox.showinfo('HTML:', html)
-
 				#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 				#Parsing
-				#parser = Parser()
 				try:
 					parser = PyJsParser()
 					for jsfile in js:
-						self.log("Parsing file "+jsfile+" ...")
 						with open(jsfile, 'r') as readfile:
 							data = readfile.read().decode('utf-8')
 						tree = parser.parse(data)
 
 						check_js(tree)
-						self.log(report)
+						if warning:
+							self.log("File "+jsfile+":")
+							self.log(report)
 
 						report = ""
-						self.log("File "+jsfile+" parsed successfully.")
 
 					parser2 = MyHTMLParser()
 					for htmlfile in html:
-						self.log("Parsing file "+htmlfile+" ...")
 						with open(htmlfile, 'r') as readfile:
 							data = readfile.read().decode('utf-8')
 						tree = parser2.feed(data)
-						self.log(report)
-						self.log("File "+htmlfile+" parsed successfully.")
-						#result = tree.to_ecma()
-						#tkMessageBox.showinfo('Tree', tree)
-						#tkMessageBox.showinfo('Report', report)
+
+						if warning:
+							self.log("File "+htmlfile+":")
+							self.log(report)
+						
 						report = ""
 
+					self.log("Finished.\n\nSuspicious actions found: " + str(counter))
 				except Exception, e:
 					tkMessageBox.showinfo('Application',  e)
 
@@ -488,7 +482,6 @@ if Tkinter:
 					except Exception as e:
 						tkMessageBox.showinfo('Application',  e)
 
-				self.log("Finished.")
 			self.after(100, self.processMessages)
 
 
@@ -519,7 +512,6 @@ if Tkinter:
 
 				chrome_app_id = message.split("/")[-1]
 				chrome_app_id = chrome_app_id.split("?")[0]
-				#tkMessageBox.showinfo('Application',  chrome_app_id)
 				file_name = message.split("/")[-2]
 
 				download_url = CRX_URL.replace("~~~~", chrome_app_id)

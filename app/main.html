@@ -2,12 +2,59 @@
 
 <html>
   <head>
+  	<style>
+		.container {
+			width: 250px;
+			overflow: auto;
+		}
+
+		.cube {
+		    float: left;
+		    width: 150px; 
+		    height: 150px;
+		}
+
+		.button {
+		    background-color: #4CAF50; /* Green */
+		    border: none;
+		    color: white;
+		    padding: 12px 24px;
+		    text-align: center;
+		    text-decoration: none;
+		    display: inline-block;
+		    font-size: 12px;
+		    margin: 4px 2px;
+		    -webkit-transition-duration: 0.4s; /* Safari */
+		    transition-duration: 0.4s;
+		    cursor: pointer;
+		}
+
+		.button2 {
+		    background-color: white; 
+		    color: black; 
+		    border: 2px solid #008CBA;
+		}
+
+		.button2:hover {
+		    background-color: #008CBA;
+		    color: white;
+		}
+
+	</style>
+
+	<title>Chrome Extension Static Analisis</title>
+
     <script src='./main.js'></script>
   </head>
   <body>
-    <button id='connect-button'>Connect</button>
-    <button id='send-message-button'>Send</button> 
-    
-    <div id='response'></div>
+  	<div class="container">
+
+	  	<p>Chrome Extension Static Analisis</p>
+
+	    <button class="button button2" title="Connect to native messaging host" id='connect-button'>Connect</button>
+	    <button class="button button2" title="Run Analysis" id='send-message-button'>Run</button> 
+	    
+	    <div class="cube" id='response'></div>
+	</div>
   </body>
 </html>

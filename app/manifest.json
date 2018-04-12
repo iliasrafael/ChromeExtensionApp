@@ -1,5 +1,4 @@
 {
-  // Extension ID: knldjmfmopnpolahpmmgbagdohdnhkik
   "key": "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDcBHwzDvyBQ6bDppkIs9MP4ksKqCMyXQ/A52JivHZKh4YO/9vJsT3oaYhSpDCE9RPocOEQvwsHsFReW2nUEc6OLLyoCFFxIb7KkLGsmfakkut/fFdNJYh0xOTbSN8YvLWcqph09XAY2Y/f0AL7vfO1cuCqtkMt8hFrBGWxDdf9CQIDAQAB",
   "name": "Extension Analysis",
   "version": "1.0",
@@ -10,12 +9,6 @@
     "default_icon": "icon-128.png",
     "default_popup": "main.html"
   },
-
-  //"app": {
-  //  "launch": {
-  //    "local_path": "main.html"
-  //  }
-  //},
   "icons": {
     "128": "icon-128.png"
   },
