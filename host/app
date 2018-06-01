@@ -16,7 +16,6 @@ import urlparse
 
 import zipfile
 
-#from slimit.parser import Parser
 from pyjsparser.parser import PyJsParser
 from HTMLParser import HTMLParser
 
@@ -114,7 +113,10 @@ def check_url(url):
 				return True
 	return False
 
-call_list = ["addListener", "onUpdated", "onCreated", "onBeforeRequest", "tabs", "chrome", "remove", "onHeadersReceived", "webRequest", "splice", "install", "management", "uninstall", "webstore", "query", "system", "cpu", "display", "sessions", "getDevices", "XMLHttpRequest", "send"]
+call_list = ["addListener", "onUpdated", "onCreated", "onBeforeRequest", "tabs",
+	"chrome", "remove", "onHeadersReceived", "webRequest", "splice", "install",
+	"management", "uninstall", "webstore", "query", "system", "cpu", "display",
+	"sessions", "getDevices", "XMLHttpRequest", "send"]
 
 dec_list = ["document", "forms"]
 
@@ -358,7 +360,7 @@ def check_js(tree):
 		report += "Warning! Access to websites blocked.\n"
 		counter += 1
 		warning = True
-	#URL MITM
+	#URL redirection
 	if web_listener and redirect and block:
 		report += "Warning! URL redirection (MITM).\n"
 		counter += 1
@@ -417,7 +419,7 @@ if Tkinter:
 				if message == None:
 					self.quit()
 					return
-				self.log("Exception URL: %s" % message)
+				self.log("Extension URL: %s" % message)
 
 				message = message.replace("\"", "")
 
@@ -426,7 +428,7 @@ if Tkinter:
 				self.download(message)
 				self.log("Download finished successfully.")
 
-				#List all .js files
+				#List all .js and .html files
 				js = []
 				html = []
 				for (dirpath, dirnames, filenames) in walk('extensions'):
@@ -437,7 +439,7 @@ if Tkinter:
 						elif filename[-5:] == '.html':
 							path = dirpath+"/"+filename
 							html.append(path)
-
+		
 				#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 				#Parsing
 				try:
