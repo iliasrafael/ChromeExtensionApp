@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from pyjsparser.parser import PyJsParser
+from esprima import esprima
 from HTMLParser import HTMLParser
 
 import sys
@@ -90,6 +90,9 @@ def check_js(tree):
 	global report
 
 	CallExpression = []
+	depth = 0
+	scope = 0
+
 	callees = []
 	Vars = []
 	decs = []
@@ -97,27 +100,29 @@ def check_js(tree):
 	keys = []
 
 	extension_tab = False
-	remove_tab = False
-	tab_listener = False
+	remove_tab = -1
+	tab_listener = -1
 	web_listener = False
 	security_option = False
-	http_header = False
-	remove_security = False
+	http_header = -1
+	remove_security = -1
 	install_extension = False
 	uninstall_extension = False
-	DoS = False
+	DoS = -1
 	cpu = False
 	displays = False
 	sessions = False
 	forms = False
-	XMLHttpRequest = False
-	send = False
+	XMLHttpRequest = -1
+	send = -1
 	redirect = False
 	cancel = False
 	block = False
 
 	l = dict_generator(tree)
 	for i in l:
+		#print i
+		
 		for j in i:
 			#URL:
 			url = isURL(str(j).strip())
@@ -135,10 +140,17 @@ def check_js(tree):
 
 		update_calls(i, callees, decs, elems, keys)
 
-		#Gather call expressions
+		#Update scope and depth
 		if i.count("CallExpression") > 0:
+			if depth > i.count("expression"):
+				scope += 1
+			depth = i.count("expression")
+
+		#Gather call expressions
+		if i.count("ExpressionStatement") > 0:
 			if callees:
-				CallExpression.append(callees)
+				temp = [callees, scope]
+				CallExpression.append(temp)
 				callees = []
 
 		#Gather variable declarations
@@ -153,66 +165,68 @@ def check_js(tree):
 
 		#Check for security options
 		elif k.count("x-frame-options") > 0 or k.count("frame-options") > 0 or k.count("content-security-policy") > 0 or k.count("x-content-security-policy") > 0 or k.count("x-webkit-csp") > 0:
-			security_option = True
+			security_option = True	
 
 	if callees:
-		CallExpression.append(callees)
+		temp = [callees, scope]
+		CallExpression.append(temp)
 		callees = []
 
+	#print CallExpression
 	while CallExpression:
 		callees = CallExpression.pop()
 
 		# chrome.tabs.onUpdated.addListener / chrome.tabs.onCreated.addListener
-		if callees.count("chrome") > 0 and callees.count("tabs") > 0 and (callees.count("onUpdated") > 0 or callees.count("onCreated") > 0) and callees.count("addListener") > 0:
-			tab_listener = True
+		if callees[0].count("chrome") > 0 and callees[0].count("tabs") > 0 and (callees[0].count("onUpdated") > 0 or callees[0].count("onCreated") > 0) and callees[0].count("addListener") > 0:
+			tab_listener = callees[1]
 
 		# chrome.webRequest.onBeforeRequest.addListener
-		elif callees.count("chrome") > 0 and callees.count("webRequest") > 0 and callees.count("onBeforeRequest") > 0 and callees.count("addListener") > 0:
+		elif callees[0].count("chrome") > 0 and callees[0].count("webRequest") > 0 and callees[0].count("onBeforeRequest") > 0 and callees[0].count("addListener") > 0:
 			web_listener = True
 
 		#chrome.tabs.remove
-		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("remove") > 0:
-			remove_tab = True
+		elif callees[0].count("chrome") > 0 and callees[0].count("tabs") > 0 and callees[0].count("remove") > 0:
+			remove_tab = callees[1]
 
 		#chrome.webRequest.onHeadersReceived.addListener
-		elif callees.count("chrome") > 0 and callees.count("webRequest") > 0 and callees.count("onHeadersReceived") > 0 and callees.count("addListener") > 0:
-			http_header = True
+		elif callees[0].count("chrome") > 0 and callees[0].count("webRequest") > 0 and callees[0].count("onHeadersReceived") > 0 and callees[0].count("addListener") > 0:
+			http_header = callees[1]
 
 		#responseHeaders.splice
-		elif callees.count("splice") > 0:
-			remove_security = True
+		elif callees[0].count("splice") > 0:
+			remove_security = callees[1]
 
 		#chrome.webstore.install
-		elif callees.count("chrome") > 0 and callees.count("webstore") > 0 and callees.count("install") > 0:
+		elif callees[0].count("chrome") > 0 and callees[0].count("webstore") > 0 and callees[0].count("install") > 0:
 			install_extension = True
 
 		#chrome.management.uninstall
-		elif callees.count("chrome") > 0 and callees.count("management") > 0 and callees.count("uninstall") > 0:
+		elif callees[0].count("chrome") > 0 and callees[0].count("management") > 0 and callees[0].count("uninstall") > 0:
 			uninstall_extension = True
 
 		#chrome.tabs.query
-		elif callees.count("chrome") > 0 and callees.count("tabs") > 0 and callees.count("query") > 0:
-			DoS = True
+		elif callees[0].count("chrome") > 0 and callees[0].count("tabs") > 0 and callees[0].count("query") > 0:
+			DoS = callees[1]
 
 		#chrome.system.cpu
-		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("cpu") > 0:
+		elif callees[0].count("chrome") > 0 and callees[0].count("system") > 0 and callees[0].count("cpu") > 0:
 			cpu = True
 
 		#chrome.system.display
-		elif callees.count("chrome") > 0 and callees.count("system") > 0 and callees.count("display") > 0:
+		elif callees[0].count("chrome") > 0 and callees[0].count("system") > 0 and callees[0].count("display") > 0:
 			displays = True
 
 		#chrome.sessions.getDevices
-		elif callees.count("chrome") > 0 and callees.count("sessions") > 0 and callees.count("getDevices") > 0:
+		elif callees[0].count("chrome") > 0 and callees[0].count("sessions") > 0 and callees[0].count("getDevices") > 0:
 			sessions = True
 
 		#new XMLHttpRequest
-		elif callees.count("XMLHttpRequest") > 0:
-			XMLHttpRequest = True
+		elif callees[0].count("XMLHttpRequest") > 0:
+			XMLHttpRequest = callees[1]
 
 		#XMLHttpRequest.send
-		elif callees.count("send") > 0:
-			send = True
+		elif callees[0].count("send") > 0:
+			send = callees[1]
 
 	while Vars:
 		decs = Vars.pop()
@@ -233,10 +247,10 @@ def check_js(tree):
 			cancel = True
 
 	#Uninstallation prevention
-	if tab_listener and remove_tab and extension_tab:
+	if (tab_listener == remove_tab != -1) and extension_tab:
 		print "Warning! Extension tab blocked."
 	#HTTP response header security options
-	if http_header and remove_security and security_option:
+	if (http_header == remove_security != -1) and security_option:
 		print "Warning! Security options are changed."
 	#Extension installation
 	if install_extension:
@@ -245,7 +259,7 @@ def check_js(tree):
 	if uninstall_extension:
 		print "Warning! Extension uninstallation."
 	#DoS
-	if DoS and remove_tab:
+	if DoS == remove_tab != -1:
 		print "Warning! DoS detected."
 	#User's CPU info
 	if cpu:
@@ -257,7 +271,7 @@ def check_js(tree):
 	if sessions:
 		print "Warning! User's info monitoring detected (sessions)."
 	#Form submit requests
-	if forms and XMLHttpRequest and send:
+	if forms and (XMLHttpRequest == send != -1):
 		print "Warning! Form submit requests leak."
 	#Access to websites blocked
 	if web_listener and cancel and block:
@@ -293,8 +307,8 @@ class MyHTMLParser(HTMLParser):
 		global report
 		if self.isScript:
 			#print data
-			parser = PyJsParser()
-			tree = parser.parse(data)
+			parser = esprima
+			tree = parser.parseScript(data, tolerant=True).toDict()
 
 			check_js(tree)
 			#print report
@@ -318,13 +332,13 @@ def Main():
 				html.append(path)
 
 	try:
-		parser = PyJsParser()
+		parser = esprima
 		for jsfile in js:
 			print "Parsing file "+jsfile+" ..."
 			with open(jsfile, 'r') as readfile:
 				data = readfile.read().decode('utf-8')
-			tree = parser.parse(data)
-
+			tree = parser.parseScript(data, tolerant=True).toDict()
+			#print tree
 			check_js(tree)
 			#print report
 
